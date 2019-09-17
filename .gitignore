@@ -102,3 +102,13 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+/model_dir
+# Note models are tracked in MLFlow
+
+# VSCode
+/.vscode
+
+# datasets
+*.npy
+*.h5
