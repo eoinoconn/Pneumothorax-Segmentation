@@ -95,19 +95,17 @@ class data_gen(Sequence):
         while True:
 
             x_data = np.zeros((self.batch_size, self.img_width, self.img_height, self.img_channel), dtype="float32")
-            y_data = np.zeros((self.batch_size, self.img_width, self.img_height, self.img_channel), dtype="float32")
+            y_data = np.zeros((self.batch_size, self.img_width, self.img_height, 1), dtype="float32")
             
             train_files_batch = self.files[self.batch_size * idx:self.batch_size * (idx+1)]
 
             for n, inst in enumerate(train_files_batch):
                 image_id = inst.split("/")[-1][:-4]
                 if image_id in self.image_ids:
-                    img = pydicom.dcmread(inst).pixel_array
-                    img = cv2.resize(img, dsize=(self.img_width,self.img_height), interpolation=cv2.INTER_CUBIC)
-                    img = img.astype("float32") / 255
-                    x_data[n] = np.expand_dims(img, axis=2)
 
                     rle_list = self.df[self.df["ImageId"] == image_id].EncodedPixels.values
+                    if all( True for rle in rle_list if rle == "-1"):
+                        continue
                     for rle in rle_list:
                         if rle == "-1":
                             continue
@@ -115,33 +113,18 @@ class data_gen(Sequence):
                             mask = rle2mask(rle, 1024, 1024).astype("float32")
                             mask = cv2.resize(mask, dsize=(self.img_width,self.img_height), interpolation=cv2.INTER_CUBIC)
                             y_data[n] = np.expand_dims(mask, axis=2)
+
+                            img = pydicom.dcmread(inst).pixel_array
+                            img = cv2.resize(img, dsize=(self.img_width,self.img_height), interpolation=cv2.INTER_CUBIC)
+                            img = img.astype("float32") / 255
+                            img = np.expand_dims(img, axis=2)
+                            current_channel_num = img.shape[-1]
+                            if self.img_channel > current_channel_num:
+                                img = np.tile(img, (1,1,self.img_channel))
+                            x_data[n] = img
+
             return (x_data, y_data)
             
-    def __call__(self):
-        idx = 0
-        while True:
-
-            x_data = np.zeros((self.batch_size, self.img_width, self.img_height, self.img_channel), dtype="uint8")
-            y_data = np.zeros((self.batch_size, self.img_width, self.img_height, self.img_channel), dtype="uint8")
-            
-            train_files_batch = self.files[self.batch_size * idx:self.batch_size * (idx+1)]
-            idx += 1
-            for n, inst in enumerate(train_files_batch):
-                image_id = inst.split("/")[-1][:-4]
-                if image_id in self.image_ids:
-                    img = pydicom.dcmread(inst).pixel_array
-                    img = cv2.resize(img, dsize=(self.img_width,self.img_height), interpolation=cv2.INTER_CUBIC)
-                    x_data[n] = np.expand_dims(img, axis=2)
-
-                    rle_list = self.df[self.df["ImageId"] == image_id].EncodedPixels.values
-                    for rle in rle_list:
-                        if rle == "-1":
-                            continue
-                        else:
-                            mask = rle2mask(rle, 1024, 1024).astype("uint8")
-                            mask = cv2.resize(mask, dsize=(self.img_width,self.img_height), interpolation=cv2.INTER_CUBIC)
-                            y_data[n] = np.expand_dims(mask, axis=2)
-            yield (x_data, y_data)
 
     def on_epoch_end(self):
         'Updates indexes after each epoch'
