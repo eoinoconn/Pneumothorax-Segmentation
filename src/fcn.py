@@ -7,6 +7,10 @@ from .resnet_helpers import *
 from tensorflow.keras.layers import *
 from tensorflow.keras import *
 
+WEIGHTS_PATH_NO_TOP = ('https://github.com/fchollet/deep-learning-models/'
+                       'releases/download/v0.1/'
+                       'vgg16_weights_tf_dim_ordering_tf_kernels_notop.h5')
+
 def FCN_Vgg16_32s(input_shape, weight_decay=0., batch_momentum=0.9,  classes=1):
 
     img_input = tf.keras.layers.Input(input_shape)
@@ -127,18 +131,26 @@ def FCN_32s(input_shape, weight_decay=0., batch_momentum=0.9,  classes=1):
     x = tf.keras.layers.Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv3', kernel_regularizer=l2(weight_decay))(x)
     x = tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2), name='block5_pool')(x)
 
+    model = tf.keras.Model(img_input, x)
+
+    weights_path = tf.keras.utils.get_file(
+                        'vgg16_weights_tf_dim_ordering_tf_kernels_notop.h5',
+                        WEIGHTS_PATH_NO_TOP,
+                        cache_subdir='models',
+                        file_hash='6d6bbae143d832006294945121d1f1fc')
+    model.load_weights(weights_path, by_name=True)
+
     # Convolutional layers transfered from fully-connected layers
-    x = tf.keras.layers.Conv2D(2048, (7, 7), activation='relu', padding='same', name='fc1', kernel_regularizer=l2(weight_decay))(x)
+    x = tf.keras.layers.Conv2D(512, (7, 7), activation='relu', padding='same', name='fc1', kernel_regularizer=l2(weight_decay))(x)
     x = tf.keras.layers.Dropout(0.5)(x)
-    x = tf.keras.layers.Conv2D(2048, (1, 1), activation='relu', padding='same', name='fc2', kernel_regularizer=l2(weight_decay))(x)
+    x = tf.keras.layers.Conv2D(512, (1, 1), activation='relu', padding='same', name='fc2', kernel_regularizer=l2(weight_decay))(x)
     x = tf.keras.layers.Dropout(0.5)(x)
     #classifying layer
+    
     x = tf.keras.layers.Conv2D(classes, (1, 1), kernel_initializer='he_normal', activation='linear', padding='valid', strides=(1, 1), kernel_regularizer=l2(weight_decay))(x)
 
     x = tf.keras.layers.UpSampling2D(size=(32, 32), interpolation='bilinear')(x)
-
-    model = tf.keras.Model(img_input, x)
-
-    weights_path = os.path.expanduser(os.path.join('~', '.keras/models/fcn_vgg16_weights_tf_dim_ordering_tf_kernels.h5'))
-    model.load_weights(weights_path, by_name=True)
+   
+    model = tf.keras.Model(model.inputs[0], x)
+    
     return model
